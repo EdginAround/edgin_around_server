@@ -1,0 +1,8 @@
+res/images/
+res/inventory/
+res/sprites/**/*.png
+res/tiles/
+res/effects/**/*.mp3
+__pycache__/
+session.vim
+rust/target
