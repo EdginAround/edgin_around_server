@@ -253,13 +253,11 @@ class InventoryUpdateTask(essentials.Task):
 
 
 class DieAndDropTask(essentials.Task):
-    DIE_DURATION = 0.01  # sec
-
     def __init__(self, dier_id: essentials.EntityId, drops: List[essentials.Entity]) -> None:
         super().__init__()
         self.dier_id = dier_id
         self.drops = drops
-        self.job = jobs.WaitJob(self.DIE_DURATION, [events.FinishedEvent(self.dier_id)])
+        self.job = jobs.DieJob(self.dier_id)
 
     def start(self, state: state.State) -> Sequence[actions.Action]:
         dier = state.get_entity(self.dier_id)
