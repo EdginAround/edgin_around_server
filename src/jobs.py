@@ -133,3 +133,16 @@ class DamageJob(essentials.Job):
         )
         repeat = None if self.should_conclude() else self.REPEAT_INTERVAL
         return essentials.JobResult(events=[event], actions=[action], repeat=repeat)
+
+
+class DieJob(essentials.Job):
+    def __init__(self, dier_id: defs.ActorId) -> None:
+        super().__init__()
+        self.dier_id = dier_id
+
+    def get_start_delay(self) -> float:
+        return 0.0
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        state.delete_entity(self.dier_id)
+        return essentials.JobResult()
