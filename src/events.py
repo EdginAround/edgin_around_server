@@ -14,44 +14,42 @@ class Event(abc.ABC):
         return self._receiver_id
 
 
-class ResumeEvent(Event):
-    def __init__(self, receiver_id: defs.ActorId) -> None:
+class CraftEvent(Event):
+    DEBUG_FIELDS: List[str] = []
+
+    def __init__(
+        self,
+        receiver_id: defs.ActorId,
+        assembly: craft.Assembly,
+    ) -> None:
         super().__init__(receiver_id)
+        self.assembly = assembly
+
+    @staticmethod
+    def from_move(receiver_id: defs.ActorId, move: moves.CraftMove) -> "CraftEvent":
+        return CraftEvent(receiver_id, move.assembly)
+
+
+class DamageEvent(Event):
+    DEBUG_FIELDS = ["dealer_id", "receiver_id", "damage_amount", "damage_variant"]
+
+    def __init__(
+        self,
+        receiver_id: defs.ActorId,
+        dealer_id: defs.ActorId,
+        damage_amount: float,
+        damage_variant: defs.DamageVariant,
+    ) -> None:
+        super().__init__(receiver_id)
+        self.dealer_id = dealer_id
+        self.receiver_id = receiver_id
+        self.damage_amount = damage_amount
+        self.damage_variant = damage_variant
 
 
 class FinishedEvent(Event):
     def __init__(self, receiver_id: defs.ActorId) -> None:
         super().__init__(receiver_id)
-
-
-class StopEvent(Event):
-    def __init__(self, receiver_id: defs.ActorId) -> None:
-        super().__init__(receiver_id)
-
-    @staticmethod
-    def from_move(receiver_id: defs.ActorId, move: moves.StopMove) -> "StopEvent":
-        return StopEvent(receiver_id)
-
-
-class ConcludeEvent(Event):
-    def __init__(self, receiver_id: defs.ActorId) -> None:
-        super().__init__(receiver_id)
-
-    @staticmethod
-    def from_move(receiver_id: defs.ActorId, move: moves.ConcludeMove) -> "ConcludeEvent":
-        return ConcludeEvent(receiver_id)
-
-
-class StartMotionEvent(Event):
-    DEBUG_FIELDS = ["bearing"]
-
-    def __init__(self, receiver_id: defs.ActorId, bearing: float) -> None:
-        super().__init__(receiver_id)
-        self.bearing = bearing
-
-    @staticmethod
-    def from_move(receiver_id: defs.ActorId, move: moves.StartMotionMove) -> "StartMotionEvent":
-        return StartMotionEvent(receiver_id, move.bearing)
 
 
 class HandActivationEvent(Event):
@@ -103,46 +101,38 @@ class InventoryUpdateEvent(Event):
         )
 
 
-class DamageEvent(Event):
-    DEBUG_FIELDS = ["dealer_id", "receiver_id", "damage_amount", "damage_variant"]
-
-    def __init__(
-        self,
-        receiver_id: defs.ActorId,
-        dealer_id: defs.ActorId,
-        damage_amount: float,
-        damage_variant: defs.DamageVariant,
-    ) -> None:
+class ResumeEvent(Event):
+    def __init__(self, receiver_id: defs.ActorId) -> None:
         super().__init__(receiver_id)
-        self.dealer_id = dealer_id
-        self.receiver_id = receiver_id
-        self.damage_amount = damage_amount
-        self.damage_variant = damage_variant
 
 
-class CraftEvent(Event):
-    DEBUG_FIELDS: List[str] = []
+class MotionStartEvent(Event):
+    DEBUG_FIELDS = ["bearing"]
 
-    def __init__(
-        self,
-        receiver_id: defs.ActorId,
-        assembly: craft.Assembly,
-    ) -> None:
+    def __init__(self, receiver_id: defs.ActorId, bearing: float) -> None:
         super().__init__(receiver_id)
-        self.assembly = assembly
+        self.bearing = bearing
 
     @staticmethod
-    def from_move(receiver_id: defs.ActorId, move: moves.CraftMove) -> "CraftEvent":
-        return CraftEvent(receiver_id, move.assembly)
+    def from_move(receiver_id: defs.ActorId, move: moves.MotionStartMove) -> "MotionStartEvent":
+        return MotionStartEvent(receiver_id, move.bearing)
+
+
+class MotionStopEvent(Event):
+    def __init__(self, receiver_id: defs.ActorId) -> None:
+        super().__init__(receiver_id)
+
+    @staticmethod
+    def from_move(receiver_id: defs.ActorId, move: moves.MotionStopMove) -> "MotionStopEvent":
+        return MotionStopEvent(receiver_id)
 
 
 _EVENT_CONSTRUCTORS: Dict[type, Any] = {
-    moves.StopMove: StopEvent.from_move,
-    moves.ConcludeMove: ConcludeEvent.from_move,
-    moves.StartMotionMove: StartMotionEvent.from_move,
+    moves.CraftMove: CraftEvent.from_move,
     moves.HandActivationMove: HandActivationEvent.from_move,
     moves.InventoryUpdateMove: InventoryUpdateEvent.from_move,
-    moves.CraftMove: CraftEvent.from_move,
+    moves.MotionStartMove: MotionStartEvent.from_move,
+    moves.MotionStopMove: MotionStopEvent.from_move,
 }
 
 

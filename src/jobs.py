@@ -6,80 +6,6 @@ from edgin_around_api import actions, defs
 from . import essentials, events, state
 
 
-class WaitJob(essentials.Job):
-    DEBUG_FIELDS = ["duration", "events"]
-
-    def __init__(self, duration: float, events: List[events.Event]) -> None:
-        super().__init__()
-        self.duration = duration
-        self.events = events
-
-    def get_start_delay(self) -> float:
-        return self.duration
-
-    def execute(self, state: state.State) -> essentials.JobResult:
-        return essentials.JobResult(events=self.events, repeat=None)
-
-
-class HungerDrainJob(essentials.Job):
-    DEBUG_FIELDS: List[str] = []
-    INTERVAL = 1.0  # sec
-
-    def __init__(self, entity_id: defs.ActorId) -> None:
-        super().__init__()
-        self.entity_id = entity_id
-
-    def get_start_delay(self) -> float:
-        return self.INTERVAL
-
-    def execute(self, state: state.State) -> essentials.JobResult:
-        entity = state.get_entity(self.entity_id)
-        if entity is None or entity.features.eater is None:
-            return essentials.JobResult()
-
-        entity.features.eater.deduce(1.0)
-        stats = entity.features.eater.gather_stats()
-        action_list: List[actions.Action] = [actions.StatUpdateAction(entity.get_id(), stats)]
-        return essentials.JobResult(actions=action_list, repeat=self.INTERVAL)
-
-
-class MovementJob(essentials.Job):
-    DEBUG_FIELDS = ["speed", "bearing", "duration"]
-    INTERVAL = 0.1  # second
-
-    def __init__(
-        self,
-        entity_id: defs.ActorId,
-        speed: float,
-        bearing: float,
-        duration: float,
-        finish_events: List[events.Event],
-    ) -> None:
-        super().__init__()
-        self.entity_id = entity_id
-        self.speed = speed
-        self.bearing = bearing
-        self.duration = duration
-        self.finish_events = finish_events
-        self.start_time = time.monotonic()
-
-    def get_start_delay(self) -> float:
-        return self.INTERVAL
-
-    def execute(self, state: state.State) -> essentials.JobResult:
-        entity = state.get_entity(self.entity_id)
-        if entity is None:
-            return essentials.JobResult(events=self.finish_events)
-
-        entity.move_by(self.speed * self.INTERVAL, self.bearing, state.get_radius())
-
-        now = time.monotonic()
-        if self.start_time + self.duration < now:
-            return essentials.JobResult(events=self.finish_events)
-        else:
-            return essentials.JobResult(repeat=self.INTERVAL)
-
-
 class DamageJob(essentials.Job):
     DEBUG_FIELDS: List[str] = []
     REPEAT_INTERVAL = 1.0
@@ -146,3 +72,78 @@ class DieJob(essentials.Job):
     def execute(self, state: state.State) -> essentials.JobResult:
         state.delete_entity(self.dier_id)
         return essentials.JobResult()
+
+
+class WaitJob(essentials.Job):
+    DEBUG_FIELDS = ["duration", "events"]
+
+    def __init__(self, duration: float, events: List[events.Event]) -> None:
+        super().__init__()
+        self.duration = duration
+        self.events = events
+
+    def get_start_delay(self) -> float:
+        return self.duration
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        return essentials.JobResult(events=self.events, repeat=None)
+
+
+class HungerDrainJob(essentials.Job):
+    DEBUG_FIELDS: List[str] = []
+    INTERVAL = 1.0 # sec
+
+    def __init__(self, entity_id: defs.ActorId) -> None:
+        super().__init__()
+        self.entity_id = entity_id
+
+    def get_start_delay(self) -> float:
+        return self.INTERVAL
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        entity = state.get_entity(self.entity_id)
+        if entity is None or entity.features.eater is None:
+            return essentials.JobResult()
+
+        entity.features.eater.deduce(1.0)
+        stats = entity.features.eater.gather_stats()
+        action_list: List[actions.Action] = [actions.StatUpdateAction(entity.get_id(), stats)]
+        return essentials.JobResult(actions=action_list, repeat=self.INTERVAL)
+
+
+class MotionJob(essentials.Job):
+    DEBUG_FIELDS = ["speed", "bearing", "duration"]
+    INTERVAL = 0.1 # second
+
+    def __init__(
+        self,
+        entity_id: defs.ActorId,
+        speed: float,
+        bearing: float,
+        duration: float,
+        finish_events: List[events.Event],
+    ) -> None:
+        super().__init__()
+        self.entity_id = entity_id
+        self.speed = speed
+        self.bearing = bearing
+        self.duration = duration
+        self.finish_events = finish_events
+        self.start_time = time.monotonic()
+
+    def get_start_delay(self) -> float:
+        return self.INTERVAL
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        entity = state.get_entity(self.entity_id)
+        if entity is None:
+            return essentials.JobResult(events=self.finish_events)
+
+        entity.move_by(self.speed * self.INTERVAL, self.bearing, state.get_radius())
+
+        now = time.monotonic()
+        if self.start_time + self.duration < now:
+            return essentials.JobResult(events=self.finish_events)
+        else:
+            return essentials.JobResult(repeat=self.INTERVAL)
+

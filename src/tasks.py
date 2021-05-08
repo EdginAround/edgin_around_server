@@ -14,10 +14,10 @@ class MovementTask(essentials.Task):
         self.entity_id = entity_id
         self.speed = speed
         self.bearing = bearing
-        self.job = jobs.MovementJob(entity_id, self.speed, self.bearing, self.TIMEOUT, list())
+        self.job = jobs.MotionJob(entity_id, self.speed, self.bearing, self.TIMEOUT, list())
 
     def start(self, state: state.State) -> Sequence[actions.Action]:
-        return [actions.MovementAction(self.entity_id, self.speed, self.bearing, self.TIMEOUT)]
+        return [actions.MotionAction(self.entity_id, self.speed, self.bearing, self.TIMEOUT)]
 
     def get_job(self) -> Optional[essentials.Job]:
         return self.job
@@ -33,7 +33,7 @@ class MovementTask(essentials.Task):
 
         position = entity.get_position()
         assert position is not None
-        return [actions.LocalizeAction(self.entity_id, position)]
+        return [actions.LocalizationAction(self.entity_id, position)]
 
 
 class WalkTask(essentials.Task):
@@ -51,10 +51,10 @@ class WalkTask(essentials.Task):
         self.duration = duration
 
     def start(self, state: state.State) -> Sequence[actions.Action]:
-        return [actions.MovementAction(self.entity_id, self.speed, self.bearing, self.duration)]
+        return [actions.MotionAction(self.entity_id, self.speed, self.bearing, self.duration)]
 
     def get_job(self) -> Optional[essentials.Job]:
-        return jobs.MovementJob(
+        return jobs.MotionJob(
             self.entity_id,
             self.speed,
             self.bearing,
@@ -67,7 +67,7 @@ class WalkTask(essentials.Task):
         assert entity is not None
         position = entity.get_position()
         assert position is not None
-        return [actions.LocalizeAction(self.entity_id, position)]
+        return [actions.LocalizationAction(self.entity_id, position)]
 
 
 class PickItemTask(essentials.Task):
@@ -106,7 +106,7 @@ class PickItemTask(essentials.Task):
 
         if self.what_id is not None:
             self.job = jobs.WaitJob(self.PICK_DURATION, [events.FinishedEvent(self.who_id)])
-            return [actions.PickStartAction(self.who_id, self.what_id)]
+            return [actions.PickBeginAction(self.who_id, self.what_id)]
         else:
             return list()
 
@@ -135,7 +135,7 @@ class PickItemTask(essentials.Task):
 
         result: Sequence[actions.Action] = [
             actions.PickEndAction(self.who_id),
-            actions.UpdateInventoryAction(self.who_id, entity.features.inventory.get()),
+            actions.InventoryUpdateAction(self.who_id, entity.features.inventory.get()),
         ]
 
         return result
@@ -249,7 +249,7 @@ class InventoryUpdateTask(essentials.Task):
             inventory.swap(self.hand, self.inventory_index)
         elif self.update_variant == defs.UpdateVariant.MERGE:
             state.merge_entities(inventory, self.hand, self.inventory_index)
-        return [actions.UpdateInventoryAction(self.performer_id, inventory)]
+        return [actions.InventoryUpdateAction(self.performer_id, inventory)]
 
 
 class DieAndDropTask(essentials.Task):
@@ -276,7 +276,7 @@ class DieAndDropTask(essentials.Task):
             for drop in self.drops
         ]
 
-        return [actions.CreateActorsAction(drops), actions.DeleteActorsAction([self.dier_id])]
+        return [actions.ActorCreationAction(drops), actions.ActorDeletionAction([self.dier_id])]
 
     def get_job(self) -> Optional[essentials.Job]:
         return self.job
@@ -309,7 +309,7 @@ class CraftTask(essentials.Task):
             return list()
 
         self._job = jobs.WaitJob(self.CRAFT_DURATION, [events.FinishedEvent(self._crafter_id)])
-        return [actions.CraftStartAction(self._crafter_id)]
+        return [actions.CraftBeginAction(self._crafter_id)]
 
     def get_job(self) -> Optional[essentials.Job]:
         return self._job
@@ -321,8 +321,8 @@ class CraftTask(essentials.Task):
 
         craft_result = state.craft_entity(self._assembly, crafter.features.inventory.get())
         return [
-            actions.CreateActorsAction(craft_result.created),
-            actions.DeleteActorsAction(craft_result.deleted),
-            actions.UpdateInventoryAction(self._crafter_id, crafter.features.inventory.get()),
+            actions.ActorCreationAction(craft_result.created),
+            actions.ActorDeletionAction(craft_result.deleted),
+            actions.InventoryUpdateAction(self._crafter_id, crafter.features.inventory.get()),
             actions.CraftEndAction(self._crafter_id),
         ]

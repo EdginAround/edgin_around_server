@@ -23,9 +23,9 @@ class WarriorTest(common.EntityTest):
             if i == 0:
                 expected_final = []
             else:
-                expected_final = [actions.LocalizeAction(id, ignored_location)]
-            expected_initial = [actions.MovementAction(id, duration, ignored_bearing, speed)]
-            expected_job = jobs.MovementJob(id, speed, ignored_bearing, duration, [finish_event])
+                expected_final = [actions.LocalizationAction(id, ignored_location)]
+            expected_initial = [actions.MotionAction(id, duration, ignored_bearing, speed)]
+            expected_job = jobs.MotionJob(id, speed, ignored_bearing, duration, [finish_event])
 
             self.assert_actions(old_task.finish(self.world), expected_final)
             self.assert_actions(new_task.start(self.world), expected_initial)

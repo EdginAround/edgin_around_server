@@ -59,15 +59,18 @@ class EntityTest(unittest.TestCase):
         if isinstance(received, actions.ConfigurationAction):
             assert isinstance(expected, type(received))  # for mypy
             self.assert_configuration_action(received, expected)
-        elif isinstance(received, actions.LocalizeAction):
+        elif isinstance(received, actions.IdleAction):
             assert isinstance(expected, type(received))  # for mypy
-            self.assert_localize_action(received, expected)
-        elif isinstance(received, actions.MovementAction):
+            self.assert_idle_action(received, expected)
+        elif isinstance(received, actions.LocalizationAction):
             assert isinstance(expected, type(received))  # for mypy
-            self.assert_movement_action(received, expected)
-        elif isinstance(received, actions.PickStartAction):
+            self.assert_localization_action(received, expected)
+        elif isinstance(received, actions.MotionAction):
             assert isinstance(expected, type(received))  # for mypy
-            self.assert_pick_start_action(received, expected)
+            self.assert_motion_action(received, expected)
+        elif isinstance(received, actions.PickBeginAction):
+            assert isinstance(expected, type(received))  # for mypy
+            self.assert_pick_begin_action(received, expected)
         else:
             raise Exception(f"Action {type(received).__name__} is not supported by tests yet!")
 
@@ -80,34 +83,43 @@ class EntityTest(unittest.TestCase):
 
         self.assertEqual(received.hero_actor_id, expected.hero_actor_id)
 
-    def assert_localize_action(
+    def assert_idle_action(
         self,
-        received: actions.LocalizeAction,
-        expected: actions.LocalizeAction,
+        received: actions.IdleAction,
+        expected: actions.IdleAction,
     ) -> None:
-        """Asserts that the two passed `localize` actions are equal."""
+        """Asserts that the two passed `idle` actions are equal."""
+
+        self.assertEqual(received.actor_id, expected.actor_id)
+
+    def assert_localization_action(
+        self,
+        received: actions.LocalizationAction,
+        expected: actions.LocalizationAction,
+    ) -> None:
+        """Asserts that the two passed `localization` actions are equal."""
 
         # Position is ignored.
         self.assertEqual(received.actor_id, expected.actor_id)
 
-    def assert_movement_action(
+    def assert_motion_action(
         self,
-        received: actions.MovementAction,
-        expected: actions.MovementAction,
+        received: actions.MotionAction,
+        expected: actions.MotionAction,
     ) -> None:
-        """Asserts that the two passed `movement` actions are equal."""
+        """Asserts that the two passed `motion` actions are equal."""
 
         # Bearing is generated randomly. No need to check it.
         self.assertEqual(received.actor_id, expected.actor_id)
         self.assertEqual(received.speed, expected.speed)
         self.assertEqual(received.duration, expected.duration)
 
-    def assert_pick_start_action(
+    def assert_pick_begin_action(
         self,
-        received: actions.PickStartAction,
-        expected: actions.PickStartAction,
+        received: actions.PickBeginAction,
+        expected: actions.PickBeginAction,
     ) -> None:
-        """Asserts that the two passed `pick_start` actions are equal."""
+        """Asserts that the two passed `pick_begin` actions are equal."""
 
         self.assertEqual(received.who, expected.who)
         self.assertEqual(received.what, expected.what)
@@ -128,9 +140,9 @@ class EntityTest(unittest.TestCase):
         if isinstance(received, jobs.WaitJob):
             assert isinstance(expected, type(received))  # for mypy
             self.assert_wait_job(received, expected)
-        elif isinstance(received, jobs.MovementJob):
+        elif isinstance(received, jobs.MotionJob):
             assert isinstance(expected, type(received))  # for mypy
-            self.assert_movement_job(received, expected)
+            self.assert_motion_job(received, expected)
         else:
             raise Exception(f"Job {type(received).__name__} is not supported by tests yet!")
 
@@ -139,7 +151,7 @@ class EntityTest(unittest.TestCase):
 
         self.assertEqual(expected.duration, received.duration)
 
-    def assert_movement_job(self, received: jobs.MovementJob, expected: jobs.MovementJob) -> None:
+    def assert_motion_job(self, received: jobs.MotionJob, expected: jobs.MotionJob) -> None:
         """Asserts that the two passed `movement` jobs are equal."""
 
         # Bearing is generated randomly. No need to check it.

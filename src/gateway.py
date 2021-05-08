@@ -134,7 +134,7 @@ class Gateway:
     def send_create_actors(self, target_actor_id: defs.ActorId, actors: List[actors.Actor]) -> None:
         """Sends the `create_actors` message to the specified client."""
 
-        self.send_action(target_actor_id, actions.CreateActorsAction(actors))
+        self.send_action(target_actor_id, actions.ActorCreationAction(actors))
 
     def send_action(self, target_actor_id: defs.ActorId, action: actions.Action) -> None:
         """Sends the passed action to the specified client."""

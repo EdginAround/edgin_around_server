@@ -146,13 +146,10 @@ class Pirate(essentials.Entity):
     def handle_event(self, event: events.Event) -> None:
         assert self.features.inventory
 
-        if isinstance(event, events.ConcludeEvent):
-            self.task.conclude()
-
-        elif isinstance(event, events.StopEvent) or isinstance(event, events.FinishedEvent):
+        if isinstance(event, events.MotionStopEvent) or isinstance(event, events.FinishedEvent):
             self.task = essentials.IdleTask()
 
-        elif isinstance(event, events.StartMotionEvent):
+        elif isinstance(event, events.MotionStartEvent):
             self.task = tasks.MovementTask(self.get_id(), speed=1.0, bearing=event.bearing)
 
         elif isinstance(event, events.HandActivationEvent):

@@ -3,7 +3,7 @@ from . import common
 from typing import List
 
 from edgin_around_api import actions, defs, geometry
-from src import entities, essentials, events, generator, jobs
+from src import entities, essentials, events, generator, jobs, tasks
 
 
 class HeroTest(common.EntityTest):
@@ -12,11 +12,11 @@ class HeroTest(common.EntityTest):
         self.world.add_entity(hero)
 
         old, new = self.handle_event(hero, events.ResumeEvent(hero.get_id()))
-        self.assertTrue(isinstance(old, essentials.IdleTask))
-        self.assertTrue(isinstance(new, essentials.IdleTask))
+        self.assertTrue(isinstance(old, essentials.EmptyTask))
+        self.assertTrue(isinstance(new, tasks.IdleTask))
         self.assertEqual(old.finish(self.world), list())
         self.assertEqual(new.get_job(), None)
-        self.assertEqual(new.start(self.world), list())
+        self.assertEqual(new.start(self.world), [actions.IdleAction(hero.get_id())])
 
     def test_movement(self) -> None:
         expected_initial: List[actions.Action]
@@ -30,21 +30,22 @@ class HeroTest(common.EntityTest):
         self.world.add_entity(hero)
         id = hero.get_id()
 
-        old, new = self.handle_event(hero, events.StartMotionEvent(id, bearing))
+        old, new = self.handle_event(hero, events.MotionStartEvent(id, bearing))
         self.assertIsNot(old, new)
 
-        expected_initial = [actions.MovementAction(id, speed, bearing, max_duration)]
-        expected_job = jobs.MovementJob(id, speed, bearing, max_duration, list())
+        expected_initial = [actions.MotionAction(id, speed, bearing, max_duration)]
+        expected_job = jobs.MotionJob(id, speed, bearing, max_duration, list())
         self.assert_actions(old.finish(self.world), list())
         self.assert_actions(new.start(self.world), expected_initial)
         self.assert_job(new.get_job(), expected_job)
 
-        old, new = self.handle_event(hero, events.StopEvent(id))
+        old, new = self.handle_event(hero, events.MotionStopEvent(id))
         self.assertIsNot(old, new)
 
-        expected_initial = [actions.LocalizeAction(id, ignored_location)]
-        self.assert_actions(old.finish(self.world), expected_initial)
-        self.assert_actions(new.start(self.world), list())
+        expected_final = [actions.LocalizationAction(id, ignored_location)]
+        expected_initial = [actions.IdleAction(id)]
+        self.assert_actions(old.finish(self.world), expected_final)
+        self.assert_actions(new.start(self.world), expected_initial)
         self.assert_job(new.get_job(), None)
 
     def test_picking(self) -> None:
@@ -76,7 +77,7 @@ class HeroTest(common.EntityTest):
         self.assertIsNot(old, new)
 
         expected_job = jobs.WaitJob(pick_timeout, list())
-        expected_initial = [actions.PickStartAction(who=hero_id, what=close_id)]
+        expected_initial = [actions.PickBeginAction(who=hero_id, what=close_id)]
         self.assert_actions(old.finish(self.world), list())
         self.assert_actions(new.start(self.world), expected_initial)
         self.assert_job(new.get_job(), expected_job)
