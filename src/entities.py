@@ -147,10 +147,10 @@ class Pirate(essentials.Entity):
         assert self.features.inventory
 
         if isinstance(event, events.MotionStopEvent) or isinstance(event, events.FinishedEvent):
-            self.task = essentials.IdleTask()
+            self.task = tasks.IdleTask(self.get_id())
 
         elif isinstance(event, events.MotionStartEvent):
-            self.task = tasks.MovementTask(self.get_id(), speed=1.0, bearing=event.bearing)
+            self.task = tasks.MotionTask(self.get_id(), speed=1.0, bearing=event.bearing)
 
         elif isinstance(event, events.HandActivationEvent):
             item_id = self.features.inventory.get().get_hand(event.hand)
@@ -171,7 +171,7 @@ class Pirate(essentials.Entity):
             self.task = tasks.CraftTask(self.get_id(), event.assembly)
 
         elif isinstance(event, events.ResumeEvent):
-            self.task = essentials.IdleTask()
+            self.task = tasks.IdleTask(self.get_id())
 
 
 for klass in [Rocks, Gold, Log, Axe, Spruce, Warrior, Pirate]:

@@ -85,7 +85,7 @@ class Task:
         pass
 
 
-class IdleTask(Task):
+class EmptyTask(Task):
     def __init__(self) -> None:
         super().__init__()
 
@@ -105,7 +105,7 @@ class Entity:
 
     def __init__(self, id: defs.ActorId, position: EntityPosition) -> None:
         self.id = id
-        self.task: Task = IdleTask()
+        self.task: Task = EmptyTask()
         self.features = features.Features()
 
         self.position: Optional[geometry.Point]

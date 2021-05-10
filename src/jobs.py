@@ -91,7 +91,7 @@ class WaitJob(essentials.Job):
 
 class HungerDrainJob(essentials.Job):
     DEBUG_FIELDS: List[str] = []
-    INTERVAL = 1.0 # sec
+    INTERVAL = 1.0  # sec
 
     def __init__(self, entity_id: defs.ActorId) -> None:
         super().__init__()
@@ -113,7 +113,7 @@ class HungerDrainJob(essentials.Job):
 
 class MotionJob(essentials.Job):
     DEBUG_FIELDS = ["speed", "bearing", "duration"]
-    INTERVAL = 0.1 # second
+    INTERVAL = 0.1  # second
 
     def __init__(
         self,
@@ -146,4 +146,3 @@ class MotionJob(essentials.Job):
             return essentials.JobResult(events=self.finish_events)
         else:
             return essentials.JobResult(repeat=self.INTERVAL)
-

@@ -31,6 +31,8 @@ class Engine(executor.Processor):
     def handle_connection(self, client_id: int) -> defs.ActorId:
         # TODO: craeate a custom hero
         hero = entities.Pirate(defs.UNASSIGNED_ACTOR_ID, (0.500 * math.pi, 0.000 * math.pi))
+        assert hero.features.inventory is not None
+
         self.state.add_entity(hero)
         self._handle_entity(hero)
 
@@ -45,8 +47,9 @@ class Engine(executor.Processor):
         ]
 
         self.gateway.associate_actor(client_id, hero_entity_id)
-        self.gateway.send_create_actors(hero_entity_id, response_actors)
+        self.gateway.send_actor_creation(hero_entity_id, response_actors)
         self.gateway.send_configuration(hero_entity_id, self.state.elevation_function)
+        self.gateway.send_inventory_update(hero_entity_id, hero.features.inventory.inventory)
 
         return hero_entity_id
 

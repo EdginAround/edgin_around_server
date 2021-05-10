@@ -2,7 +2,7 @@ import random, selectors, socket, sys
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from edgin_around_api import actors, actions, defs, geometry
+from edgin_around_api import actors, actions, defs, geometry, inventory
 
 
 class Selector:
@@ -131,10 +131,19 @@ class Gateway:
 
         self.send_action(actor_id, actions.ConfigurationAction(actor_id, elevation_function))
 
-    def send_create_actors(self, target_actor_id: defs.ActorId, actors: List[actors.Actor]) -> None:
-        """Sends the `create_actors` message to the specified client."""
+    def send_actor_creation(
+        self, target_actor_id: defs.ActorId, actors: List[actors.Actor]
+    ) -> None:
+        """Sends the `actor_creation` message to the specified client."""
 
         self.send_action(target_actor_id, actions.ActorCreationAction(actors))
+
+    def send_inventory_update(
+        self, target_actor_id: defs.ActorId, inventory: inventory.Inventory
+    ) -> None:
+        """Sends the `inventory_update` message to the specified client."""
+
+        self.send_action(target_actor_id, actions.InventoryUpdateAction(target_actor_id, inventory))
 
     def send_action(self, target_actor_id: defs.ActorId, action: actions.Action) -> None:
         """Sends the passed action to the specified client."""
