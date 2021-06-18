@@ -3,7 +3,7 @@ import math, time
 from typing import Dict, Optional, Union
 
 from edgin_around_api import actions, actors, defs
-from . import entities, essentials, events, executor, gateway, jobs, state
+from . import entities, essentials, events, executor, gateway, jobs, state, tasks
 
 
 class Engine(executor.Processor):
@@ -33,11 +33,7 @@ class Engine(executor.Processor):
         hero = entities.Pirate(defs.UNASSIGNED_ACTOR_ID, (0.500 * math.pi, 0.000 * math.pi))
         assert hero.features.inventory is not None
 
-        self.state.add_entity(hero)
-        self._handle_entity(hero)
-
-        hero_entity_id = hero.get_id()
-        response_actors = [
+        all_actors = [
             actors.Actor(
                 entity.id,
                 entity.get_name(),
@@ -46,12 +42,21 @@ class Engine(executor.Processor):
             for entity in self.state.get_entities()
         ]
 
+        self.state.add_entity(hero)
+        self._handle_entity(hero)
+
+        hero_entity_id = hero.get_id()
         self.gateway.associate_actor(client_id, hero_entity_id)
-        self.gateway.send_actor_creation(hero_entity_id, response_actors)
+        self.gateway.send_actor_creation(hero_entity_id, all_actors)
+        self.gateway.broadcast_actor_creation([hero.as_actor()])
         self.gateway.send_configuration(hero_entity_id, self.state.elevation_function)
-        self.gateway.send_inventory_update(hero_entity_id, hero.features.inventory.inventory)
+        self.gateway.deliver_inventory_update(hero_entity_id, hero.features.inventory.inventory)
 
         return hero_entity_id
+
+    def handle_disconnection(self, actor_id: defs.ActorId) -> None:
+        self.gateway.disassociate_actor(actor_id)
+        self._handle_event(events.DisconnectionEvent(actor_id))
 
     def _handle_job(self, handle: executor.JobHandle, job: essentials.Job) -> None:
         result = job.perform(self.state)

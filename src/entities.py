@@ -173,6 +173,9 @@ class Pirate(essentials.Entity):
         elif isinstance(event, events.ResumeEvent):
             self.task = tasks.IdleTask(self.get_id())
 
+        elif isinstance(event, events.DisconnectionEvent):
+            self.task = tasks.DieAndDropTask(self.get_id(), [])
+
 
 for klass in [Rocks, Gold, Log, Axe, Spruce, Warrior, Pirate]:
     settings.ENTITIES[klass.CODENAME] = klass

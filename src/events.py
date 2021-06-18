@@ -7,7 +7,7 @@ from edgin_around_api import craft, defs, moves
 
 
 class Event(abc.ABC):
-    def __init__(self, receiver_id) -> None:
+    def __init__(self, receiver_id: defs.ActorId) -> None:
         self._receiver_id = receiver_id
 
     def get_receiver_id(self) -> defs.ActorId:
@@ -45,6 +45,13 @@ class DamageEvent(Event):
         self.receiver_id = receiver_id
         self.damage_amount = damage_amount
         self.damage_variant = damage_variant
+
+
+class DisconnectionEvent(Event):
+    DEBUG_FIELDS = ["hero_id"]
+
+    def __init__(self, hero_id: defs.ActorId) -> None:
+        super().__init__(hero_id)
 
 
 class FinishedEvent(Event):

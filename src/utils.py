@@ -1,6 +1,6 @@
 import socket
 
-from typing import List
+from typing import List, Optional
 
 
 class SocketProcessor:
@@ -11,7 +11,7 @@ class SocketProcessor:
         self._chunk_size = chunk_size
         self._chunks: List[str] = list()
 
-    def read_messages(self, sock: socket.socket) -> List[str]:
+    def read_messages(self, sock: socket.socket) -> Optional[List[str]]:
         """Reads messages from the socket."""
 
         EOM = b"\n"
@@ -20,6 +20,11 @@ class SocketProcessor:
         try:
             while EOM not in chunk:
                 chunk = sock.recv(self._chunk_size)
+
+                # Iterpret empty data as disconnection
+                if not chunk:
+                    return None
+
                 self._chunks.append(chunk.decode())
 
             messages = "".join(self._chunks).split("\n")
@@ -27,5 +32,4 @@ class SocketProcessor:
             return messages
 
         except Exception as e:
-            print("Message read error:", e)
-            return list()
+            return None
