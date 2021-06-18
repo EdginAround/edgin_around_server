@@ -80,6 +80,9 @@ class Task:
     def finish(self, state: "state.State") -> Sequence[actions.Action]:
         pass
 
+    def abort(self, state: "state.State") -> Sequence[actions.Action]:
+        return list()
+
     @abstractmethod
     def get_job(self) -> Optional[Job]:
         pass

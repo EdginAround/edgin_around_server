@@ -1,4 +1,4 @@
-import json, socket, threading
+import json, logging, socket, threading
 
 from typing import Iterable, List
 
@@ -25,8 +25,11 @@ class ServerBroadcaster:
 class EventListener:
     """Socket event handler processing game moves from clients."""
 
-    def __init__(self, engine: engine.Engine, actor_id: defs.ActorId) -> None:
+    def __init__(
+        self, engine: engine.Engine, association: gateway.ClientAssociation, actor_id: defs.ActorId
+    ) -> None:
         self._engine = engine
+        self._association = association
         self._actor_id = actor_id
         self._processor = utils.SocketProcessor()
 
@@ -34,8 +37,15 @@ class EventListener:
         """Processes received messages."""
 
         messages = self._processor.read_messages(sock)
-        for message in messages:
-            self._process_message(message)
+        if messages is not None:
+            for message in messages:
+                self._process_message(message)
+        else:
+            logging.info(f"Client controlling actor '{self._actor_id}' disconnected")
+            selector.unregister(sock)
+            self._engine.handle_disconnection(self._actor_id)
+            self._association.disassociate_actor(self._actor_id)
+            sock.close()
 
     def _process_message(self, message: str) -> None:
         """Processes one message and passes it to the `Engine`."""
@@ -65,7 +75,7 @@ class EventAcceptor:
         client_id = self._association.generate_client_id()
         self._association.associate_socket(client_id, connection)
         actor_id = self._engine.handle_connection(client_id)
-        selector.register(connection, EventListener(self._engine, actor_id))
+        selector.register(connection, EventListener(self._engine, self._association, actor_id))
 
 
 class Harbour:

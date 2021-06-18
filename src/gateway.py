@@ -1,4 +1,4 @@
-import random, selectors, socket, sys
+import logging, random, selectors, socket, sys
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -28,7 +28,7 @@ class Selector:
 
 
 class ClientAssociation:
-    """Keeps information about what client is sonnected to which socket."""
+    """Keeps information about what client is connected to which socket."""
 
     def __init__(self) -> None:
         self._clients: Dict[defs.ActorId, int] = dict()
@@ -54,16 +54,19 @@ class ClientAssociation:
         """Removes all information related to the given client."""
 
         actor_id = self._find_actor_for_client(client_id)
-        if actor_id is not None:
-            del self._clients[actor_id]
+        if client_id in self._sockets:
             del self._sockets[client_id]
+        if actor_id in self._clients:
+            del self._clients[actor_id]
 
     def disassociate_actor(self, actor_id: defs.ActorId) -> None:
         """Removes all information related to the given client controlling the given hero."""
 
-        client_id = self._clients[actor_id]
-        del self._clients[actor_id]
-        del self._sockets[client_id]
+        if actor_id in self._clients:
+            client_id = self._clients[actor_id]
+            del self._clients[actor_id]
+            if client_id in self._sockets:
+                del self._sockets[client_id]
 
     def get_sockets(self) -> Iterable[Tuple[int, socket.socket]]:
         """Return an iterable of all connected clients and sockets."""
@@ -122,6 +125,37 @@ class Gateway:
 
         self._association.associate_actor(client_id, actor_id)
 
+    def disassociate_actor(self, actor_id: defs.ActorId) -> None:
+        """
+        Removes information about what entity ID is assigned to the hero controlled by the given
+        client.
+        """
+
+        self._association.disassociate_actor(actor_id)
+
+    def broadcast_actor_creation(self, actors: List[actors.Actor]) -> None:
+        """Sends the `actor_creation` message to every client."""
+
+        self.broadcast_action(actions.ActorCreationAction(actors))
+
+    def deliver_inventory_update(
+        self, target_actor_id: defs.ActorId, inventory: inventory.Inventory
+    ) -> None:
+        """
+        Sends the `inventory_update` message with full inventory to the specified client and
+        broadcast the public part of the inventory.
+        """
+
+        self.send_action(target_actor_id, actions.InventoryUpdateAction(target_actor_id, inventory))
+        self.broadcast_action(actions.InventoryUpdateAction(target_actor_id, inventory.public()))
+
+    def send_actor_creation(
+        self, target_actor_id: defs.ActorId, actors: List[actors.Actor]
+    ) -> None:
+        """Sends the `actor_creation` message to the specified client."""
+
+        self.send_action(target_actor_id, actions.ActorCreationAction(actors))
+
     def send_configuration(
         self,
         actor_id: defs.ActorId,
@@ -131,20 +165,6 @@ class Gateway:
 
         self.send_action(actor_id, actions.ConfigurationAction(actor_id, elevation_function))
 
-    def send_actor_creation(
-        self, target_actor_id: defs.ActorId, actors: List[actors.Actor]
-    ) -> None:
-        """Sends the `actor_creation` message to the specified client."""
-
-        self.send_action(target_actor_id, actions.ActorCreationAction(actors))
-
-    def send_inventory_update(
-        self, target_actor_id: defs.ActorId, inventory: inventory.Inventory
-    ) -> None:
-        """Sends the `inventory_update` message to the specified client."""
-
-        self.send_action(target_actor_id, actions.InventoryUpdateAction(target_actor_id, inventory))
-
     def send_action(self, target_actor_id: defs.ActorId, action: actions.Action) -> None:
         """Sends the passed action to the specified client."""
 
@@ -153,9 +173,9 @@ class Gateway:
             try:
                 sock.sendall(f"{action.to_string()}\n".encode())
             except:
-                self._selector.unregister(sock)
-                self._association.disassociate_actor(target_actor_id)
-                sock.close()
+                # No need for other actions. Disconnection will be handles by `Harbour`.
+                e = sys.exc_info()[0]
+                logging.warning(f"Problem sending action: {e}")
 
     def broadcast_action(self, action: actions.Action) -> None:
         """Sends the passed action to all connected clients client."""
@@ -164,6 +184,6 @@ class Gateway:
             try:
                 sock.sendall(f"{action.to_string()}\n".encode())
             except:
-                self._selector.unregister(sock)
-                self._association.disassociate_client(client_id)
-                sock.close()
+                # No need for other actions. Disconnection will be handles by `Harbour`.
+                e = sys.exc_info()[0]
+                logging.warning(f"Problem broadcasting action: {e}")
