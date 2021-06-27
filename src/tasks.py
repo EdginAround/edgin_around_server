@@ -29,7 +29,8 @@ class CraftTask(essentials.Task):
         if not state.validate_assembly(self._assembly, crafter.features.inventory.get()):
             return list()
 
-        self._job = jobs.WaitJob(self.CRAFT_DURATION, [events.FinishedEvent(self._crafter_id)])
+        finish_events: List[events.Event] = [events.FinishedEvent(self._crafter_id)]
+        self._job = jobs.WaitJob(self.CRAFT_DURATION, finish_events)
         return [actions.CraftBeginAction(self._crafter_id)]
 
     def get_job(self) -> Optional[essentials.Job]:
@@ -68,7 +69,7 @@ class DieAndDropTask(essentials.Task):
             actors.Actor(
                 drop.id,
                 drop.get_name(),
-                drop.position,
+                dier.get_position(),
             )
             for drop in self.drops
         ]
@@ -80,6 +81,188 @@ class DieAndDropTask(essentials.Task):
 
     def finish(self, state: state.State) -> Sequence[actions.Action]:
         return list()
+
+
+class GrowTask(essentials.Task):
+    """Task for plants sending grow events periodically."""
+
+    def __init__(self, grower_id: essentials.EntityId, grow_interval: int) -> None:
+        super().__init__()
+        self.grower_id = grower_id
+        self.grow_interval = grow_interval
+
+    def start(self, state: state.State) -> Sequence[actions.Action]:
+        grower = state.get_entity(self.grower_id)
+
+        if grower is None:
+            return list()
+
+        if grower.features.harvestable is None:
+            return list()
+
+        self.job = jobs.GrowJob(self.grower_id, self.grow_interval)
+
+        return list()
+
+    def get_job(self) -> Optional[essentials.Job]:
+        return self.job
+
+    def finish(self, state: state.State) -> Sequence[actions.Action]:
+        return list()
+
+
+class HarvestTask(essentials.Task):
+    PICK_DURATION = 1.0  # sec
+    HARVEST_DURATION = 1.0  # sec
+    MAX_DISTANCE = 1.0
+
+    def __init__(
+        self,
+        who_id: essentials.EntityId,
+        what_id: Optional[essentials.EntityId],
+        hand: defs.Hand,
+    ) -> None:
+        super().__init__()
+        self.who_id = who_id
+        self.what_id = what_id
+        self.hand = hand
+        self.job: Optional[essentials.Job] = None
+
+    def start(self, state: state.State) -> Sequence[actions.Action]:
+        if self.what_id is None:
+            self.what_id = state.find_closest_delivering_within(
+                self.who_id, [features.Claim.CARGO, features.Claim.HARVEST], self.MAX_DISTANCE
+            )
+
+        if self.what_id is None:
+            return list()
+
+        entity = state.get_entity(self.who_id)
+        subject = state.get_entity(self.what_id)
+        if entity is None or subject is None:
+            return list()
+
+        distance = state.calculate_distance(entity, subject)
+        if distance is None or self.MAX_DISTANCE < distance:
+            return list()
+
+        start_events = [events.PickStartEvent(self.what_id, self.who_id)]
+        finish_events = [
+            events.FinishedEvent(self.who_id),
+            events.PickFinishEvent(self.what_id, self.who_id),
+        ]
+
+        self.job = jobs.WaitJob(0.0, [events.PickStartEvent(self.what_id, self.who_id)]).and_then(
+            self.HARVEST_DURATION, [events.FinishedEvent(self.who_id)]
+        )
+
+        if subject.features.inventorable:
+            return [actions.PickBeginAction(self.who_id, self.what_id)]
+
+        elif subject.features.harvestable:
+            return [actions.HarvestBeginAction(self.who_id, self.what_id)]
+
+        else:
+            return list()
+
+    def get_job(self) -> Optional[essentials.Job]:
+        return self.job
+
+    def finish(self, state: state.State) -> Sequence[actions.Action]:
+        if self.job is not None and self.job.is_complete():
+            return self._finish_complete(state)
+        else:
+            return list()
+
+    def _finish_complete(self, state: state.State) -> Sequence[actions.Action]:
+        """Finishes the task is case if the job was completed."""
+
+        if self.what_id is None:
+            return list()
+
+        entity = state.get_entity(self.who_id)
+        subject = state.get_entity(self.what_id)
+        if entity is None or subject is None:
+            return list()
+
+        if not entity.features.inventory:
+            return list()
+
+        distance = state.calculate_distance(entity, subject)
+        if distance is None or self.MAX_DISTANCE < distance:
+            return list()
+
+        if subject.features.inventorable:
+            return self._finish_inventorable(entity, subject)
+
+        elif subject.features.harvestable:
+            return self._finish_harvestable(state, entity, subject)
+
+        else:
+            return list()
+
+    def _finish_inventorable(
+        self, entity: essentials.Entity, subject: essentials.Entity
+    ) -> Sequence[actions.Action]:
+        """
+        Finishes putting to inventory.
+
+        This method is called only if the job was completed.
+        """
+
+        assert entity.features.inventory
+        assert subject.features.inventorable
+
+        entity.features.inventory.store_entry(self.hand, subject.as_info())
+        subject.features.inventorable.set_stored_by(entity.get_id())
+        subject.set_position(None)
+
+        result: Sequence[actions.Action] = [
+            actions.PickEndAction(self.who_id),
+            actions.InventoryUpdateAction(self.who_id, entity.features.inventory.get()),
+        ]
+
+        return result
+
+    def _finish_harvestable(
+        self, state: state.State, entity: essentials.Entity, subject: essentials.Entity
+    ) -> Sequence[actions.Action]:
+        """
+        Finishes harvesting: creates crops and puts them to harvesting hand if possible.
+
+        This method is called only if the job was completed.
+        """
+
+        assert entity.features.inventory
+        assert subject.features.harvestable
+
+        crops = subject.features.harvestable.harvest()
+
+        result: Sequence[actions.Action] = list()
+
+        if len(crops) == 1:
+            crop = crops[0]
+            state.add_entity(crop)
+            entity.features.inventory.store_entry(self.hand, crop.as_info())
+
+            result = [
+                actions.HarvestEndAction(self.who_id),
+                actions.ActorCreationAction([crop.as_actor()]),
+                actions.InventoryUpdateAction(self.who_id, entity.features.inventory.get()),
+            ]
+
+            return result
+
+        elif len(crops) > 1:
+            state.add_entities(crops)
+            actors = [crop.as_actor() for crop in crops]
+
+            result = [
+                actions.HarvestEndAction(self.who_id),
+                actions.ActorCreationAction(actors),
+            ]
+
+        return result
 
 
 class IdleTask(essentials.Task):
@@ -162,75 +345,30 @@ class MotionTask(essentials.Task):
         return [actions.LocalizationAction(self.entity_id, position)]
 
 
-class PickItemTask(essentials.Task):
-    PICK_DURATION = 1.0  # sec
-    MAX_DISTANCE = 1.0
-
-    def __init__(
-        self,
-        who_id: essentials.EntityId,
-        what_id: Optional[essentials.EntityId],
-        hand: defs.Hand,
-    ) -> None:
+class StateChangeTask(essentials.Task):
+    def __init__(self, entity_id: defs.ActorId, state_name: str) -> None:
         super().__init__()
-        self.who_id = who_id
-        self.what_id = what_id
-        self.hand = hand
-        self.job: Optional[essentials.Job] = None
+        self.entity_id = entity_id
+        self.state_name = state_name
+        self.job = jobs.WaitJob(0.0, [events.FinishedEvent(self.entity_id)])
 
     def start(self, state: state.State) -> Sequence[actions.Action]:
-        if self.what_id is None:
-            self.what_id = state.find_closest_delivering_within(
-                self.who_id, [features.Claim.CARGO], self.MAX_DISTANCE
-            )
-
-        if self.what_id is None:
+        entity = state.get_entity(self.entity_id)
+        if entity is None:
             return list()
 
-        entity = state.get_entity(self.who_id)
-        item = state.get_entity(self.what_id)
-        if entity is None or item is None:
+        if not entity.features.stateful:
             return list()
 
-        distance = state.calculate_distance(entity, item)
-        if distance is None or self.MAX_DISTANCE < distance:
-            return list()
+        entity.features.stateful.set_state_name(self.state_name)
 
-        if self.what_id is not None:
-            self.job = jobs.WaitJob(self.PICK_DURATION, [events.FinishedEvent(self.who_id)])
-            return [actions.PickBeginAction(self.who_id, self.what_id)]
-        else:
-            return list()
+        return [actions.ActorUpdateAction(self.entity_id, self.state_name)]
 
     def get_job(self) -> Optional[essentials.Job]:
         return self.job
 
     def finish(self, state: state.State) -> Sequence[actions.Action]:
-        if self.what_id is None:
-            return list()
-
-        entity = state.get_entity(self.who_id)
-        item = state.get_entity(self.what_id)
-        if entity is None or item is None:
-            return list()
-
-        if not entity.features.inventory or not item.features.inventorable:
-            return list()
-
-        distance = state.calculate_distance(entity, item)
-        if distance is None or self.MAX_DISTANCE < distance:
-            return list()
-
-        entity.features.inventory.store_entry(self.hand, item.as_info())
-        item.features.inventorable.set_stored_by(entity.get_id())
-        item.set_position(None)
-
-        result: Sequence[actions.Action] = [
-            actions.PickEndAction(self.who_id),
-            actions.InventoryUpdateAction(self.who_id, entity.features.inventory.get()),
-        ]
-
-        return result
+        return list()
 
 
 class UseItemTask(essentials.Task):
@@ -249,6 +387,7 @@ class UseItemTask(essentials.Task):
         self.receiver_id = receiver_id
         self.hand = hand
         self.job: Optional[essentials.Job] = None
+        self.finish_actions: List[actions.Action] = list()
 
     def start(self, state: state.State) -> Sequence[actions.Action]:
         performer = state.get_entity(self.performer_id)
@@ -258,24 +397,15 @@ class UseItemTask(essentials.Task):
 
         claims = item.features.delivery_claims()
 
-        self.receiver_id = (
-            self.receiver_id
-            if self.receiver_id
-            else state.find_closest_absorbing_within(self.performer_id, claims, self.MAX_DISTANCE)
-        )
-
-        if self.receiver_id is None:
-            return list()
+        self.receiver_id = self.receiver_id if self.receiver_id is not None else self.performer_id
 
         receiver = state.get_entity(self.receiver_id)
         if receiver is None:
             return list()
 
-        distance = state.calculate_distance(performer, receiver)
-        if distance is None or self.MAX_DISTANCE < distance:
-            return list()
-
         claim = receiver.features.get_first_absorbed(claims)
+
+        action_list: List[actions.Action] = list()
 
         if claim is None:
             pass
@@ -290,23 +420,34 @@ class UseItemTask(essentials.Task):
             )
 
         elif claim is features.Claim.FOOD:
-            # TODO: Implement eating items.
-            pass
+            self.job = jobs.EatJob(
+                self.performer_id,
+                self.hand,
+                self.item_id,
+                [events.FinishedEvent(self.performer_id)],
+            )
+
+            action_list = [actions.EatBeginAction(self.performer_id)]
+            self.finish_actions = [actions.EatEndAction(self.performer_id)]
 
         elif claim is features.Claim.CARGO:
             # TODO: Implement giving items.
             pass
 
+        elif claim is features.Claim.HARVEST:
+            # Harvesting is done bare hand - it's handled only by `HarvestTask`.
+            pass
+
         else:
             defs.assert_exhaustive(claim)
 
-        return list()
+        return action_list
 
     def get_job(self) -> Optional[essentials.Job]:
         return self.job
 
     def finish(self, state: state.State) -> Sequence[actions.Action]:
-        return list()
+        return self.finish_actions
 
 
 class WalkTask(essentials.Task):

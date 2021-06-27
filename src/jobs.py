@@ -57,8 +57,7 @@ class DamageJob(essentials.Job):
             variant=damage_variant,
             hand=self.hand,
         )
-        repeat = None if self.should_conclude() else self.REPEAT_INTERVAL
-        return essentials.JobResult(events=[event], actions=[action], repeat=repeat)
+        return essentials.JobResult(events=[event], actions=[action], repeat=self.REPEAT_INTERVAL)
 
 
 class DieJob(essentials.Job):
@@ -74,19 +73,64 @@ class DieJob(essentials.Job):
         return essentials.JobResult()
 
 
-class WaitJob(essentials.Job):
-    DEBUG_FIELDS = ["duration", "events"]
-
-    def __init__(self, duration: float, events: List[events.Event]) -> None:
+class EatJob(essentials.Job):
+    def __init__(
+        self,
+        eater_id: defs.ActorId,
+        eater_hand: defs.Hand,
+        food_id: defs.ActorId,
+        finish_events: List[events.Event],
+    ) -> None:
         super().__init__()
-        self.duration = duration
-        self.events = events
+        self._eater_id = eater_id
+        self._eater_hand = eater_hand
+        self._food_id = food_id
+        self._finish_events = finish_events
 
     def get_start_delay(self) -> float:
-        return self.duration
+        return 0.5
 
     def execute(self, state: state.State) -> essentials.JobResult:
-        return essentials.JobResult(events=self.events, repeat=None)
+        finish = essentials.JobResult(events=self._finish_events)
+
+        eater = state.get_entity(self._eater_id)
+        if eater is None or eater.features.eater is None or eater.features.inventory is None:
+            return finish
+
+        food = state.get_entity(self._food_id)
+        if food is None or food.features.edible is None:
+            return finish
+
+        nutrients = food.features.edible.get_nutrients() * food.features.get_quantity()
+        eaten = eater.features.eater.absorb(nutrients)
+        if not eaten:
+            return essentials.JobResult()
+
+        eater.features.inventory.get().store_entry(self._eater_hand, None)
+        stats = eater.features.eater.gather_stats()
+        state.delete_entity(self._food_id)
+
+        return essentials.JobResult(
+            actions=[
+                actions.InventoryUpdateAction(eater.get_id(), eater.features.inventory.get()),
+                actions.ActorDeletionAction([self._food_id]),
+                actions.StatUpdateAction(eater.get_id(), stats),
+            ]
+        )
+
+
+class GrowJob(essentials.Job):
+    def __init__(self, grower_id: defs.ActorId, grow_interval: int) -> None:
+        super().__init__()
+        self.grower_id = grower_id
+        self.grow_interval = grow_interval
+        self.events: List[events.Event] = [events.GrowEvent(grower_id)]
+
+    def get_start_delay(self) -> float:
+        return self.grow_interval
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        return essentials.JobResult(events=self.events, repeat=self.grow_interval)
 
 
 class HungerDrainJob(essentials.Job):
@@ -146,3 +190,31 @@ class MotionJob(essentials.Job):
             return essentials.JobResult(events=self.finish_events)
         else:
             return essentials.JobResult(repeat=self.INTERVAL)
+
+
+class WaitJob(essentials.Job):
+    DEBUG_FIELDS = ["duration", "events"]
+
+    def __init__(self, duration: float, events: List[events.Event]) -> None:
+        super().__init__()
+        self.duration = duration
+        self.events = events
+        self.next: Optional[WaitJob] = None
+
+    def get_start_delay(self) -> float:
+        return self.duration
+
+    def execute(self, state: state.State) -> essentials.JobResult:
+        if self.next is not None:
+            result = essentials.JobResult(events=self.events, repeat=self.next.duration)
+            self.duration = self.next.duration
+            self.events = self.next.events
+            self.next = self.next.next
+            return result
+
+        else:
+            return essentials.JobResult(events=self.events, repeat=None)
+
+    def and_then(self, duration: float, events: List[events.Event]) -> "WaitJob":
+        self.next = WaitJob(duration, events)
+        return self.next

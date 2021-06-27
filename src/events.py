@@ -59,6 +59,13 @@ class FinishedEvent(Event):
         super().__init__(receiver_id)
 
 
+class GrowEvent(Event):
+    """Event for making plants or crops to grow."""
+
+    def __init__(self, receiver_id: defs.ActorId) -> None:
+        super().__init__(receiver_id)
+
+
 class HandActivationEvent(Event):
     DEBUG_FIELDS = ["hand", "object_id"]
 
@@ -106,6 +113,34 @@ class InventoryUpdateEvent(Event):
             move.inventory_index,
             move.update_variant,
         )
+
+
+class PickStartEvent(Event):
+    """Event used to inform an entity someone started harvesting it."""
+
+    DEBUG_FIELDS = ["picker_id"]
+
+    def __init__(
+        self,
+        receiver_id: defs.ActorId,
+        picker_id: defs.ActorId,
+    ) -> None:
+        super().__init__(receiver_id)
+        self.picker_id = picker_id
+
+
+class PickFinishEvent(Event):
+    """Event used to inform an entity someone finished harvesting it."""
+
+    DEBUG_FIELDS = ["picker_id"]
+
+    def __init__(
+        self,
+        receiver_id: defs.ActorId,
+        picker_id: defs.ActorId,
+    ) -> None:
+        super().__init__(receiver_id)
+        self.picker_id = picker_id
 
 
 class ResumeEvent(Event):

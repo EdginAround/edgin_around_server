@@ -35,7 +35,7 @@ class Job(defs.Debugable):
     def __init__(self) -> None:
         self._num_calls = 0
         self._prev_call_time = time.monotonic()
-        self._conclude = False
+        self._is_complete = False
 
     def get_num_calls(self) -> int:
         return self._num_calls
@@ -43,14 +43,15 @@ class Job(defs.Debugable):
     def get_prev_call_time(self) -> float:
         return self._prev_call_time
 
-    def conclude(self) -> None:
-        self._conclude = True
-
-    def should_conclude(self) -> bool:
-        return self._conclude
+    def is_complete(self) -> bool:
+        return self._is_complete
 
     def perform(self, state: "state.State") -> JobResult:
         result = self.execute(state)
+
+        if result.repeat is None:
+            self._is_complete = True
+
         self._num_calls += 1
         self._prev_call_time = time.monotonic()
         return result
@@ -68,10 +69,6 @@ class Task:
     def __init__(self) -> None:
         self.job: Optional[Job] = None
 
-    def conclude(self) -> None:
-        if self.job is not None:
-            self.job.conclude()
-
     @abstractmethod
     def start(self, state: "state.State") -> Sequence[actions.Action]:
         pass
@@ -79,9 +76,6 @@ class Task:
     @abstractmethod
     def finish(self, state: "state.State") -> Sequence[actions.Action]:
         pass
-
-    def abort(self, state: "state.State") -> Sequence[actions.Action]:
-        return list()
 
     @abstractmethod
     def get_job(self) -> Optional[Job]:

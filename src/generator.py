@@ -29,9 +29,14 @@ class WorldGenerator:
             entities.Gold(6, (0.496 * math.pi, 0.004 * math.pi)),
         ]
 
-        for i in range(7, 50):
+        for i in range(100, 120):
             phi = random.uniform(0.4 * math.pi, 0.6 * math.pi)
             theta = random.uniform(-0.1 * math.pi, 0.1 * math.pi)
             entity_list.append(entities.Spruce(i, (phi, theta)))
+
+        for i in range(200, 230):
+            phi = random.uniform(0.4 * math.pi, 0.6 * math.pi)
+            theta = random.uniform(-0.1 * math.pi, 0.1 * math.pi)
+            entity_list.append(entities.BerryBush(i, (phi, theta)))
 
         return state.State(elevation_function, entity_list)

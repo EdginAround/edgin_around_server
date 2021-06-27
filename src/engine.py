@@ -52,6 +52,11 @@ class Engine(executor.Processor):
         self.gateway.send_configuration(hero_entity_id, self.state.elevation_function)
         self.gateway.deliver_inventory_update(hero_entity_id, hero.features.inventory.inventory)
 
+        for entity in self.state.get_entities():
+            if entity.features.stateful is not None:
+                state_name = entity.features.stateful.get_state_name()
+                self.gateway.send_actor_update(hero_entity_id, entity.get_id(), state_name)
+
         return hero_entity_id
 
     def handle_disconnection(self, actor_id: defs.ActorId) -> None:

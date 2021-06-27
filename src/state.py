@@ -1,6 +1,6 @@
 import random, sys
 
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence
 
 from edgin_around_api import actors, craft, defs, inventory, geometry
 from . import essentials, features, settings
@@ -97,6 +97,10 @@ class State:
         if entity.get_id() < 0:
             entity.id = self.generate_new_entity_id()
         self.entities[entity.id] = entity
+
+    def add_entities(self, entities: Sequence[essentials.Entity]) -> None:
+        for entity in entities:
+            self.add_entity(entity)
 
     def delete_entity(self, entity_id: defs.ActorId) -> None:
         del self.entities[entity_id]
