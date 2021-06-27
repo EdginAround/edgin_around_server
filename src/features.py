@@ -1,9 +1,16 @@
 import random
 
+from typing import TYPE_CHECKING
+
 from enum import Enum
 from math import pi
 
-from typing import Final, Iterable, List, Optional, Set
+from . import nutrients
+
+if TYPE_CHECKING:
+    from . import essentials
+
+from typing import Any, Callable, Final, Iterable, List, Optional, Sequence, Set, Tuple
 
 from edgin_around_api import craft, defs, inventory
 
@@ -25,8 +32,12 @@ class PerformerFeature(Feature):
 
 
 class EdibleFeature(Feature):
-    def __init__(self) -> None:
+    def __init__(self, nutrients: nutrients.Nutrients) -> None:
         super().__init__()
+        self._nutrients = nutrients
+
+    def get_nutrients(self) -> nutrients.Nutrients:
+        return self._nutrients
 
 
 class EaterFeature(Feature):
@@ -37,6 +48,10 @@ class EaterFeature(Feature):
 
     def deduce(self, value: float) -> None:
         self.hunger_value = max(self.hunger_value - value, 0.0)
+
+    def absorb(self, nutrients: nutrients.Nutrients) -> bool:
+        self.hunger_value += nutrients.hunger
+        return True
 
     def get_hunger(self) -> float:
         return self.hunger_value
@@ -83,6 +98,39 @@ class DamageableFeature(Feature):
     def handle_damage(self, damage_amount: float) -> bool:
         self.health = max(0.0, self.health - damage_amount)
         return self.health != 0.0
+
+
+class HarvestableFeature(Feature):
+    def __init__(
+        self,
+        start_amount: int,
+        min_amount: int,
+        max_amount: int,
+        grow_amount: int,
+        pick_amount: int,
+        entity_constructor: Callable[[int], Sequence["essentials.Entity"]],
+    ) -> None:
+        self._current_amount = start_amount
+        self._min_amount = min_amount
+        self._max_amount = max_amount
+        self._grow_amount = grow_amount
+        self._pick_amount = pick_amount
+        self._entity_constructor = entity_constructor
+
+    def grow(self) -> Tuple[int, int]:
+        old_amount = self._current_amount
+        new_amount = self._current_amount + self._grow_amount
+        self._current_amount = max(self._min_amount, min(new_amount, self._max_amount))
+        return (old_amount, self._current_amount)
+
+    def harvest(self) -> Sequence["essentials.Entity"]:
+        new_amount = max(0, self._current_amount - self._pick_amount)
+        harvested_amount = max(0, min(self._current_amount - self._min_amount, self._pick_amount))
+        self._current_amount = new_amount
+        return (self._entity_constructor)(harvested_amount)
+
+    def get_current_amount(self) -> int:
+        return self._current_amount
 
 
 class InventoryFeature(Feature):
@@ -143,10 +191,23 @@ class StackableFeature(Feature):
         self.stack_size = amount
 
 
+class StatefulFeature(Feature):
+    def __init__(self, state_name: str) -> None:
+        super().__init__()
+        self._state_name = state_name
+
+    def get_state_name(self) -> str:
+        return self._state_name
+
+    def set_state_name(self, state_name: str) -> None:
+        self._state_name = state_name
+
+
 class Claim(Enum):
     PAIN = 0
     FOOD = 1
     CARGO = 2
+    HARVEST = 3
 
 
 class Features:
@@ -162,17 +223,19 @@ class Features:
         self._delivery_claims: List[Claim] = list()
         self._absorption_claims: Set[Claim] = set()
 
+        self.stateful: Final[Optional[StatefulFeature]] = None
         self.performer: Final[Optional[PerformerFeature]] = None
         self.stackable: Final[Optional[StackableFeature]] = None
 
         self.tool_or_weapon: Final[Optional[ToolOrWeaponFeature]] = None
         self.damageable: Final[Optional[DamageableFeature]] = None
 
-        self.eatable: Final[Optional[EdibleFeature]] = None
+        self.edible: Final[Optional[EdibleFeature]] = None
         self.eater: Final[Optional[EaterFeature]] = None
 
         self.inventorable: Final[Optional[InventorableFeature]] = None
         self.inventory: Final[Optional[InventoryFeature]] = None
+        self.harvestable: Final[Optional[HarvestableFeature]] = None
 
     def delivery_claims(self) -> List[Claim]:
         return self._delivery_claims
@@ -183,8 +246,8 @@ class Features:
                 return True
         return False
 
-    def absorb(self, claim: Iterable[Claim]) -> bool:
-        for c in claim:
+    def absorb(self, claims: Iterable[Claim]) -> bool:
+        for claim in claims:
             if claim in self._absorption_claims:
                 return True
         return False
@@ -226,9 +289,9 @@ class Features:
             damage_variant,
         )
 
-    def set_eatable(self) -> None:
+    def set_edible(self, nutrients: nutrients.Nutrients) -> None:
         self._delivery_claims.append(Claim.FOOD)
-        self.eatable = EdibleFeature()  # type: ignore[misc]
+        self.edible = EdibleFeature(nutrients)  # type: ignore[misc]
 
     def set_eater(self, max_capacity: float, hunger_value: float) -> None:
         self._absorption_claims.add(Claim.FOOD)
@@ -242,8 +305,30 @@ class Features:
         self._absorption_claims.add(Claim.CARGO)
         self.inventory = InventoryFeature()  # type: ignore[misc]
 
+    def set_harvestable(
+        self,
+        start_amount: int,
+        min_amount: int,
+        max_amount: int,
+        grow_amount: int,
+        pick_amount: int,
+        entity_constructor: Callable[[int], Sequence["essentials.Entity"]],
+    ) -> None:
+        self._absorption_claims.add(Claim.HARVEST)
+        self.harvestable = HarvestableFeature(  # type: ignore[misc]
+            start_amount,
+            min_amount,
+            max_amount,
+            grow_amount,
+            pick_amount,
+            entity_constructor,
+        )
+
     def set_stackable(self, amount: int) -> None:
         self.stackable = StackableFeature(amount)  # type: ignore[misc]
+
+    def set_stateful(self, state_name: str) -> None:
+        self.stateful = StatefulFeature(state_name)  # type: ignore[misc]
 
     def get_quantity(self) -> int:
         return self.stackable.get_size() if self.stackable is not None else 1

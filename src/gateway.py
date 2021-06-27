@@ -156,6 +156,13 @@ class Gateway:
 
         self.send_action(target_actor_id, actions.ActorCreationAction(actors))
 
+    def send_actor_update(
+        self, target_actor_id: defs.ActorId, actor_id: defs.ActorId, form: str
+    ) -> None:
+        """Sends the `actor_update` message to the specified client."""
+
+        self.send_action(target_actor_id, actions.ActorUpdateAction(actor_id, form))
+
     def send_configuration(
         self,
         actor_id: defs.ActorId,
@@ -174,7 +181,7 @@ class Gateway:
                 sock.sendall(f"{action.to_string()}\n".encode())
             except:
                 # No need for other actions. Disconnection will be handles by `Harbour`.
-                e = sys.exc_info()[0]
+                e = sys.exc_info()[1]
                 logging.warning(f"Problem sending action: {e}")
 
     def broadcast_action(self, action: actions.Action) -> None:
@@ -185,5 +192,5 @@ class Gateway:
                 sock.sendall(f"{action.to_string()}\n".encode())
             except:
                 # No need for other actions. Disconnection will be handles by `Harbour`.
-                e = sys.exc_info()[0]
+                e = sys.exc_info()[1]
                 logging.warning(f"Problem broadcasting action: {e}")
